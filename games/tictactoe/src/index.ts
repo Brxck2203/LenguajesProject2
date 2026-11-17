@@ -10,3 +10,4 @@ export {
   type TicTacToeState,
   type SessionStatus,
 } from './TicTacToeSession';
+export { TicTacToeView, type TicTacToeViewOptions } from './TicTacToeView';
