@@ -17,6 +17,10 @@ object Games:
   val Football = "FOOTBALL"
   val MotorcycleRacing = "MOTORCYCLE_RACING"
   val FreeFire = "FREE_FIRE"
+  // GameConsole (proyecto 2)
+  val TicTacToe = "TIC_TAC_TOE"
+  val Memory = "MEMORY"
+  val Battleship = "BATTLESHIP"
 
 object Actions:
   // MMA
@@ -39,3 +43,18 @@ object Actions:
   val DamageDealt = "DAMAGE_DEALT"
   val PlayerEliminated = "PLAYER_ELIMINATED"
   val ZoneShrink = "ZONE_SHRINK"
+  // Gato
+  val MovePlayed = "MOVE_PLAYED"
+  val AiDecision = "AI_DECISION"
+  // Memoria
+  val CardFlipped = "CARD_FLIPPED"
+  val PairAttempted = "PAIR_ATTEMPTED"
+  // Battleship
+  val ShotFired = "SHOT_FIRED"
+  val ShipSunk = "SHIP_SUNK"
+
+/** Valores de `reason` en `MATCH_FINISHED` (docs/contratos.md). */
+object FinishReasons:
+  val Completed = "COMPLETED"
+  val Draw = "DRAW"
+  val Abandoned = "ABANDONED"
