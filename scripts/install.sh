@@ -45,9 +45,11 @@ fi
 cat <<'MSG'
 
 GameStats está listo:
+  Consola web:        http://localhost:5173
   Panel de revisión:  http://localhost:8081/dashboard
   Go (ingestión):      http://localhost:8081/        (partidas: /matches, catálogo: /catalog, bandeja: /inbox)
   Scala (análisis):    http://localhost:8080/        (resultados: /results, por juego: /stats/games)
+  Prolog (Gato):       http://localhost:8082
   Bandeja de eventos:  ./data/inbox    Resultados JSON: ./data/results
 
 Generar partidas:      docker compose run --rm simulator -scenario random -matches 5 -wait

@@ -1,6 +1,6 @@
 # Contratos de GameConsole
 
-Acuerdos entre los módulos para trabajar en paralelo. Si algo cambia, se actualiza aquí primero y se avisa al otro. Lo marcado como **propuesta** está implementado del lado de Gabriel y se puede ajustar si Brack lo prefiere distinto.
+Contratos entre módulos y estado de integración.
 
 ## 1. Decisiones
 
@@ -9,19 +9,19 @@ Acuerdos entre los módulos para trabajar en paralelo. Si algo cambia, se actual
 | Consola | Vite + TypeScript con clases, sin framework pesado | Acordado |
 | Prolog | SWI-Prolog como servicio HTTP; el navegador lo llama directamente (CORS abierto) | Acordado |
 | Juegos | Gato (Gabriel), memoria y Battleship (Brack) | Acordado |
-| Interfaz de juegos | `GameSession` (sección 3) | Propuesta, implementada en el gato |
-| Eventos | Sobre de 8 campos de GameStats, sin `gameVersion`; los datos propios van en `data` (sección 4) | Propuesta, implementada en el gato y en Scala |
-| Abandono | Al cerrar, reiniciar o salir de una partida abierta se envía `MATCH_FINISHED` con `reason=ABANDONED`. Si no alcanza a enviarse, la partida queda activa en GameStats | Propuesta |
-| Panel | Conteos de instancias en Go; estadísticas finales y en curso en Scala (sección 6) | Propuesta, lado Scala implementado |
+| Interfaz de juegos | `GameSession` (sección 3) | Implementada en los tres juegos |
+| Eventos | Sobre de 8 campos de GameStats, sin `gameVersion`; los datos propios van en `data` (sección 4) | Implementado en productor, Go y Scala |
+| Abandono | Se envía `MATCH_FINISHED` con `reason=ABANDONED` al cerrar una partida activa | Implementado |
+| Panel | Conteos operativos en Go y métricas finales/parciales en Scala (sección 6) | Integrado en la consola web |
 
 ## 2. Servicios y puertos
 
 | Servicio | Puerto | Dueño | Estado |
 |---|---|---|---|
 | `scala-analytics` | 8080 | Gabriel | Listo |
-| `go-service` (GameStats) | 8081 | Brack | No compila en `main` |
+| `go-service` (GameStats) | 8081 | Brack | Catálogo, conteos y snapshots parciales integrados |
 | `prolog-service` | 8082 | Gabriel | Listo, con Dockerfile |
-| `console` (Vite) | 5173 | Brack | Pendiente |
+| `console` (Vite) | 5173 | Brack | Implementada |
 
 Scala y Go conservan los puertos que ya tenían en el `docker-compose.yml` del proyecto 1.
 
@@ -106,7 +106,7 @@ IDs de jugador: el del humano y `PROLOG_AI`.
 
 La jugada de la computadora envía `AI_DECISION` y después `MOVE_PLAYED`. Scala cuenta las jugadas solo con `MOVE_PLAYED`.
 
-### Memoria — `MEMORY` (propuesta para Brack; Scala ya la analiza)
+### Memoria — `MEMORY`
 
 | action | Requeridos en `data` | Opcionales |
 |---|---|---|
@@ -114,10 +114,11 @@ La jugada de la computadora envía `AI_DECISION` y después `MOVE_PLAYED`. Scala
 | `CARD_FLIPPED` | `cardIndex` (nonNegativeInteger), `symbol` (string) | — |
 | `PAIR_ATTEMPTED` | `firstCard`, `secondCard` (nonNegativeInteger), `matched` (boolean), `attempt` (positiveInteger) | — |
 
+- **Reglas:** 12 cartas y 6 parejas; un jugador.
 - **Orden de un intento:** `CARD_FLIPPED` (primera carta), `CARD_FLIPPED` (segunda carta) y luego `PAIR_ATTEMPTED`, todos con el `playerId` del jugador.
 - **Cierre:** `MATCH_FINISHED` con `reason=COMPLETED` y `winnerPlayerId` igual al jugador. No se inventa un rival.
 
-### Battleship — `BATTLESHIP` (propuesta para Brack; Scala ya la analiza)
+### Battleship — `BATTLESHIP`
 
 IDs de jugador: el del humano y `CPU`.
 
@@ -128,9 +129,10 @@ IDs de jugador: el del humano y `CPU`.
 | `SHIP_SUNK` | `targetPlayerId`, `shipId` (string), `shipSize` (positiveInteger) | — |
 
 - **Hundimiento:** el disparo que hunde un barco envía `SHOT_FIRED` con `hit=true` y después `SHIP_SUNK`. Scala no cuenta el `SHIP_SUNK` como un acierto adicional.
+- **Reglas:** tablero 6 × 6, barcos de tamaño 3/2/2 colocados automáticamente; la CPU no repite disparos.
 - **Cierre:** `MATCH_FINISHED` con `reason=COMPLETED` y `winnerPlayerId`.
 
-### Bloque para `go_service/internal/validation/event_catalog.json`
+### Entradas del catálogo Go
 
 Va dentro de `"games"`, junto a los juegos del proyecto 1:
 
@@ -158,7 +160,7 @@ Va dentro de `"games"`, junto a los juegos del proyecto 1:
 }
 ```
 
-En `lifecycle.MATCH_STARTED.optional` hay que agregar `"pairs": "positiveInteger"` y `"boardSize": "positiveInteger"`. Los demás campos extra (`humanPlayerId`, `aiPlayerId`, `firstPlayerId`) ya pasan, porque Go solo valida los campos que declara. `score` no se declara porque puede ser negativo y el catálogo no tiene un tipo de entero con signo.
+El catálogo ya incluye `"pairs": "positiveInteger"` y `"boardSize": "positiveInteger"` en `lifecycle.MATCH_STARTED.optional`. Los demás campos extra (`humanPlayerId`, `aiPlayerId`, `firstPlayerId`) pasan porque Go solo valida los campos que declara. `score` no se declara porque puede ser negativo y el catálogo no tiene un tipo de entero con signo.
 
 ## 5. Prolog (implementado)
 
@@ -168,14 +170,14 @@ Ver [`prolog_service/README.md`](../prolog_service/README.md). `POST /move` reci
 
 | Dato | Dónde | Estado |
 |---|---|---|
-| Partidas iniciadas, activas y cerradas, globales y por juego | Go: `GET /stats/instances` (propuesta, abajo) | Pendiente (Brack) |
+| Partidas iniciadas, activas y cerradas, globales y por juego | Go: `GET /stats/instances` | Implementado |
 | Estadísticas generales | Scala: `GET /stats/overview` | Listo |
 | Estadísticas por juego, finales y en curso por separado | Scala: `GET /stats/games/{gameId}` | Listo |
 | Detalle de una partida | Scala: `GET /results/{matchId}` o `GET /partial/{matchId}` | Listo |
 
-El detalle de las rutas de Scala está en [`docs/estadisticas.md`](estadisticas.md). El panel consulta Go y Scala por separado, cada 2 segundos, sin calcular métricas por su cuenta. Scala tiene CORS abierto.
+El detalle de las rutas de Scala está en [`docs/estadisticas.md`](estadisticas.md). La consola consulta Go y Scala por separado cada 2 segundos, sin calcular métricas por su cuenta. Go y Scala permiten CORS para solicitudes del navegador.
 
-### Propuesta: `GET /stats/instances` en Go
+### `GET /stats/instances` en Go
 
 ```json
 {
@@ -196,7 +198,7 @@ El detalle de las rutas de Scala está en [`docs/estadisticas.md`](estadisticas.
 
 Si Go guarda las partidas en memoria, los conteos se reinician al reiniciar el servicio; queda documentado así.
 
-### Propuesta: análisis parcial desde Go
+### Análisis parcial desde Go
 
 Para que el panel cambie mientras se juega, Go envía a Scala un snapshot de cada partida abierta:
 

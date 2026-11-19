@@ -13,6 +13,7 @@ type EventStore interface {
 	Add(domain.Event) (*domain.AnalysisRequest, error)
 	Get(string) (match.MatchSnapshot, bool)
 	MatchIDs() []string
+	Snapshots() []match.MatchSnapshot
 }
 type AnalysisService interface {
 	Analysis(string) (domain.AnalysisSnapshot, bool)
@@ -66,12 +67,27 @@ func NewRouter(store EventStore, analysis AnalysisService, options ...Option) ht
 	mux.HandleFunc("/health", handler.handleHealth)
 	mux.HandleFunc("/events", handler.handleEvents)
 	mux.HandleFunc("/events/batch", handler.handleEventsBatch)
+	mux.HandleFunc("/matches/{matchId}/events/{eventId}", handler.handleEventByID)
 	mux.HandleFunc("/matches/{matchId}", handler.handleMatchByID)
 	mux.HandleFunc("/matches/{matchId}/analysis", handler.handleAnalysis)
 	mux.HandleFunc("/matches/{matchId}/analysis/retry", handler.handleRetry)
+	mux.HandleFunc("/stats/instances", handler.handleInstanceStats)
 	mux.HandleFunc("/matches", handler.handleMatches)
 	mux.HandleFunc("/matches/{$}", handler.handleMatches)
 	mux.HandleFunc("/{$}", handler.handleIndex)
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { writeError(w, http.StatusNotFound, "endpoint not found") })
-	return mux
+	return withCORS(mux)
+}
+
+func withCORS(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		writer.Header().Set("Access-Control-Allow-Origin", "*")
+		writer.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type")
+		writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		if request.Method == http.MethodOptions {
+			writer.WriteHeader(http.StatusNoContent)
+			return
+		}
+		next.ServeHTTP(writer, request)
+	})
 }

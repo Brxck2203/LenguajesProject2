@@ -9,5 +9,5 @@
     "isolatedModules": true,
     "skipLibCheck": true
   },
-  "include": ["shared", "tictactoe"]
+  "include": ["vite-env.d.ts", "shared", "tictactoe", "memory", "battleship", "console"]
 }

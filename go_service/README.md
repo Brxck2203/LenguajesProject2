@@ -1,14 +1,15 @@
 # GameStats — módulo Go (ingestión y control del flujo)
 
-Recibe eventos simulados o de la consola de juegos por HTTP o por archivos, los valida contra el catálogo, reconstruye las partidas en memoria y envía cada partida cerrada a Scala para analizarla. **Go no calcula estadísticas**: transporta el lote y guarda el resultado que devuelve Scala.
+Recibe eventos simulados o de la consola de juegos por HTTP o por archivos, los valida contra el catálogo, reconstruye las partidas en memoria y envía cada partida cerrada a Scala para analizarla. Mientras una partida sigue abierta, reenvía snapshots acumulados a `/analyze/partial` con una frecuencia máxima de uno por segundo. **Go no calcula estadísticas de juego**: mantiene conteos operativos y transporta a Scala los eventos que esta analiza.
 
 ## Recorrido de una partida
 
 1. Un productor envía `MATCH_STARTED`, las acciones y `MATCH_FINISHED`, por `POST /events`, `POST /events/batch` o como archivos en `INBOX_DIR`.
 2. Go valida cada evento con el catálogo (`internal/validation/event_catalog.json`), rechaza duplicados y eventos fuera del ciclo de vida, y los agrupa por `matchId`.
-3. Al cerrar la partida, crea una copia ordenada por `timestamp` y registra el trabajo de análisis en una cola con capacidad limitada.
-4. Un worker envía el lote a `SCALA_ANALYSIS_URL` (`POST /analyze`) y reintenta los fallos transitorios.
-5. Go verifica la identidad y la estructura del resultado y lo deja disponible en `/matches/{id}/analysis`.
+3. Mientras la partida esté abierta, envía un snapshot completo y su revisión (`eventCount`) a `POST /analyze/partial`. Los errores se registran; otro evento agenda un snapshot nuevo. Un cierre cancela los snapshots pendientes.
+4. Al cerrar la partida, crea una copia ordenada por `timestamp` y registra el análisis final en una cola con capacidad limitada.
+5. Un worker envía el lote a `SCALA_ANALYSIS_URL` (`POST /analyze`) y reintenta los fallos transitorios.
+6. Go verifica la identidad y la estructura del resultado y lo deja disponible en `/matches/{id}/analysis`.
 
 ## Concurrencia
 
@@ -48,8 +49,10 @@ Recibe eventos simulados o de la consola de juegos por HTTP o por archivos, los 
 | POST | `/events/batch` | 202: lote `{"events":[...]}` aceptado; si un evento falla se conserva lo anterior y se indica `failedAtIndex` |
 | GET | `/matches` | Partidas con enlaces a resumen y análisis |
 | GET | `/matches/{matchId}` | Resumen: juego, participantes, cantidad de eventos, estado |
+| GET | `/matches/{matchId}/events/{eventId}` | Evento original para conciliar un reintento con HTTP 409 |
 | GET | `/matches/{matchId}/analysis` | Estado del análisis y resultado |
 | POST | `/matches/{matchId}/analysis/retry` | 202: nuevo ciclo para un análisis `FAILED` |
+| GET | `/stats/instances` | Conteos en memoria de partidas iniciadas, activas, cerradas y abandonadas, globales y por juego |
 
 | Código | Casos |
 |---|---|
@@ -60,6 +63,8 @@ Recibe eventos simulados o de la consola de juegos por HTTP o por archivos, los 
 | 413 | Cuerpo mayor de 1 MiB |
 | 415 | `Content-Type` distinto de `application/json` |
 | 503 | Capacidad de análisis agotada o servicio cerrándose (`Retry-After: 1`) |
+
+Go permite solicitudes CORS desde la consola del navegador (`localhost:5173`); las respuestas OPTIONS son preflight y no requieren una ruta individual.
 
 | Estado del análisis | Significado |
 |---|---|
@@ -121,6 +126,8 @@ Las pruebas cubren la validación y el catálogo (incluido un juego nuevo defini
 - El estado de Go está en memoria: reiniciar el proceso borra las partidas en curso. El historial persistente lo guarda Scala en `data/results`.
 
 ## Panel visual de revisión
+
+La consola de juegos está en <http://localhost:5173>; consulta `/stats/instances` en Go y las métricas finales/parciales en Scala sin recalcularlas.
 
 Abre <http://localhost:8081/dashboard> (o el puerto Go configurado). El panel muestra:
 

@@ -133,3 +133,19 @@ func (store *Store) MatchIDs() []string {
 	sort.Strings(ids)
 	return ids
 }
+
+func (store *Store) Snapshots() []MatchSnapshot {
+	store.mu.RLock()
+	defer store.mu.RUnlock()
+
+	ids := make([]string, 0, len(store.matches))
+	for id := range store.matches {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	snapshots := make([]MatchSnapshot, 0, len(ids))
+	for _, id := range ids {
+		snapshots = append(snapshots, store.matches[id].Snapshot())
+	}
+	return snapshots
+}

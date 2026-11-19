@@ -10,6 +10,9 @@ const (
 	GameFootball         = "FOOTBALL"
 	GameMotorcycleRacing = "MOTORCYCLE_RACING"
 	GameFreeFire         = "FREE_FIRE"
+	GameTicTacToe        = "TIC_TAC_TOE"
+	GameMemory           = "MEMORY"
+	GameBattleship       = "BATTLESHIP"
 
 	TypeAction = "ACTION"
 	TypeMatch  = "MATCH"

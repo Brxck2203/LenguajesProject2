@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#111827" />
+    <title>GameConsole</title>
+  </head>
+  <body>
+    <script src="/runtime-config.js"></script>
+    <div id="app">
+      <header class="app-header">
+        <div>
+          <p class="eyebrow">GameStats</p>
+          <h1>GameConsole</h1>
+        </div>
+        <nav class="tabs" aria-label="Secciones">
+          <button type="button" class="tab tab--active" data-tab="play">Juegos</button>
+          <button type="button" class="tab" data-tab="stats">Panel</button>
+        </nav>
+      </header>
+      <main>
+        <section id="play-section">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Partidas independientes</p>
+              <h2>Elige un juego</h2>
+            </div>
+            <span id="player-label" class="muted"></span>
+          </div>
+          <div class="game-picker">
+            <button type="button" class="game-choice" data-game="TIC_TAC_TOE">
+              <span aria-hidden="true">✕ ○</span><strong>Gato vs Prolog</strong><small>3 × 3 · estrategia</small>
+            </button>
+            <button type="button" class="game-choice" data-game="MEMORY">
+              <span aria-hidden="true">▦</span><strong>Memoria</strong><small>12 cartas · 6 parejas</small>
+            </button>
+            <button type="button" class="game-choice" data-game="BATTLESHIP">
+              <span aria-hidden="true">⌖</span><strong>Battleship</strong><small>6 × 6 · contra CPU</small>
+            </button>
+          </div>
+          <div id="delivery-status" class="delivery-status" role="status" aria-live="polite"></div>
+          <div class="section-heading section-heading--sessions">
+            <div><p class="eyebrow">En esta consola</p><h2>Partidas abiertas</h2></div>
+            <span id="session-count" class="count-pill">0</span>
+          </div>
+          <div id="sessions" class="sessions"></div>
+        </section>
+        <section id="stats-section" hidden>
+          <div class="section-heading">
+            <div><p class="eyebrow">Actualización cada 2 segundos</p><h2>Estadísticas</h2></div>
+          </div>
+          <div id="stats-panel"></div>
+        </section>
+      </main>
+      <footer>
+        <span>GameConsole · TypeScript</span>
+        <span id="service-urls"></span>
+      </footer>
+    </div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

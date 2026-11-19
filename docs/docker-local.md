@@ -22,7 +22,7 @@ docker compose version
 docker ps
 ```
 
-Los puertos 8080 y 8081 deben estar disponibles. Si siguen corriendo los contenedores de la versión anterior, detenerlos antes de iniciar la nueva:
+Los puertos 5173, 8080, 8081 y 8082 deben estar disponibles. Si siguen corriendo contenedores de otra versión, detener solo los que confirme que pertenecen a este proyecto. Para usar otros puertos, crear `.env` desde `.env.example` y actualizar los `VITE_*_URL` de la consola si se accede desde otro host.
 
 ```powershell
 docker stop go-analytics-service scala-analytics-service
@@ -36,18 +36,18 @@ Ese comando solo corresponde si esos nombres aparecen en `docker ps`. Si otro pr
 powershell -ExecutionPolicy Bypass -File scripts\install.ps1
 ```
 
-El script crea las carpetas de datos, compila y prueba ambos módulos dentro de las imágenes, espera la salud de los servicios y ejecuta simulaciones por HTTP y archivos. La primera compilación puede tardar varios minutos.
+El script crea las carpetas de datos, compila y prueba los módulos dentro de las imágenes, espera la salud de los servicios y ejecuta simulaciones por HTTP y archivos. También comprueba la consola, Prolog y el flujo de snapshot parcial. La primera compilación puede tardar varios minutos.
 
-Debe terminar mostrando `OK: Go y Scala integrados`. Comprobar:
+Debe terminar mostrando `OK: consola, Prolog, Go y Scala integrados`. Comprobar:
 
 ```powershell
 docker compose ps
 ```
 
-Ambos servicios deben aparecer `healthy`. Si falla, guardar el error y consultar:
+`console`, `prolog-service`, `go-service` y `scala-analytics` deben aparecer `healthy`. Si falla, guardar el error y consultar:
 
 ```powershell
-docker compose logs --tail=150 go-service scala-analytics
+docker compose logs --tail=150 console prolog-service go-service scala-analytics
 ```
 
 No usar `SKIP_TESTS=true` para la primera validación de entrega. En Linux/macOS/WSL, ejecutar `bash scripts/install.sh` en lugar de PowerShell; el instalador también prepara los permisos de escritura de los volúmenes.
@@ -56,13 +56,17 @@ No usar `SKIP_TESTS=true` para la primera validación de entrega. En Linux/macOS
 
 Con los puertos predeterminados:
 
+- <http://localhost:5173>: consola para Gato, Memoria y Battleship; panel agregado.
+- <http://localhost:8082/health>: salud de Prolog.
 - <http://localhost:8081/matches>: partidas recibidas en Go.
+- <http://localhost:8081/stats/instances>: conteos de partidas por juego.
 - <http://localhost:8080/results>: resultados calculados por Scala.
+- <http://localhost:8080/partial>: snapshots de partidas en curso.
 - <http://localhost:8080/stats/games>: estadísticas agregadas por juego.
 - <http://localhost:8080/stats/games/FREE_FIRE/players>: historial por jugador.
 - <http://localhost:8081/inbox>: procesamiento de archivos.
 
-Abre <http://localhost:8081/dashboard> para la interfaz visual. Las rutas anteriores conservan las respuestas JSON para inspección técnica. Los mensajes del simulador indican entrega de eventos; `COMPLETED` y las estadísticas consultadas confirman el análisis.
+Abre <http://localhost:8081/dashboard> para el panel de revisión de GameStats. La consola de juegos está en <http://localhost:5173>. Las rutas anteriores conservan respuestas JSON para inspección técnica. Los mensajes del simulador indican entrega de eventos; `COMPLETED` y las estadísticas consultadas confirman el análisis.
 
 Para consultar una partida en PowerShell:
 
@@ -112,16 +116,17 @@ Los archivos del directorio `data` permanecen en el equipo. No es necesario borr
 
 ## 8. Verificar la entrega
 
-- Ambos contenedores `healthy`.
+- Consola, Prolog, Go y Scala `healthy`.
 - Instalador y simulaciones con `-wait` sin errores.
 - Resultados de los cuatro juegos en `/stats/games`.
+- Partidas de GameConsole visibles en `/stats/instances` y en las métricas parciales/finales de Scala.
 - Partidas en `COMPLETED` y valores coherentes con sus eventos.
 - Resultados persistidos y recuperados después del reinicio de Scala.
 - Workflow CI/CD del PR finalizado correctamente.
 
 La ejecución local mediante Compose es un entorno de despliegue reproducible. La verificación automática del pipeline corre en máquinas temporales de GitHub y no proporciona una dirección pública permanente.
 
-## Panel visual de revisión
+## Panel visual de revisión de GameStats
 
 Abre <http://localhost:8081/dashboard> (o el puerto Go configurado). El panel muestra:
 

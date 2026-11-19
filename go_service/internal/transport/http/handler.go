@@ -72,6 +72,19 @@ type matchResponse struct {
 	FinishedAt *time.Time `json:"finishedAt"`
 }
 
+type instanceCounts struct {
+	Started   int `json:"started"`
+	Active    int `json:"active"`
+	Finished  int `json:"finished"`
+	Abandoned int `json:"abandoned"`
+}
+
+type instanceStatsResponse struct {
+	Totals    instanceCounts            `json:"totals"`
+	ByGame    map[string]instanceCounts `json:"byGame"`
+	UpdatedAt time.Time                 `json:"updatedAt"`
+}
+
 func (handler *Handler) handleHealth(writer http.ResponseWriter, request *http.Request) {
 	if request.Method != http.MethodGet {
 		writer.Header().Set("Allow", http.MethodGet)
@@ -231,7 +244,6 @@ func (handler *Handler) handleMatchByID(writer http.ResponseWriter, request *htt
 		writeError(writer, http.StatusNotFound, "match not found")
 		return
 	}
-
 	playerIDs := snapshot.PlayerIDs
 	if playerIDs == nil {
 		playerIDs = []string{}
@@ -245,6 +257,69 @@ func (handler *Handler) handleMatchByID(writer http.ResponseWriter, request *htt
 		StartedAt:  snapshot.StartedAt,
 		FinishedAt: snapshot.FinishedAt,
 	})
+}
+
+func (handler *Handler) handleEventByID(writer http.ResponseWriter, request *http.Request) {
+	if request.Method != http.MethodGet {
+		writer.Header().Set("Allow", http.MethodGet)
+		writeError(writer, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	snapshot, exists := handler.store.Get(request.PathValue("matchId"))
+	if !exists {
+		writeError(writer, http.StatusNotFound, "match not found")
+		return
+	}
+	eventID := request.PathValue("eventId")
+	for _, event := range snapshot.Events {
+		if event.EventID == eventID {
+			writeJSON(writer, http.StatusOK, event)
+			return
+		}
+	}
+	writeError(writer, http.StatusNotFound, "event not found")
+}
+
+func (handler *Handler) handleInstanceStats(writer http.ResponseWriter, request *http.Request) {
+	if request.Method != http.MethodGet {
+		writer.Header().Set("Allow", http.MethodGet)
+		writeError(writer, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	response := instanceStatsResponse{
+		ByGame:    make(map[string]instanceCounts, len(handler.catalog.Games)),
+		UpdatedAt: time.Now().UTC(),
+	}
+	for gameID := range handler.catalog.Games {
+		response.ByGame[gameID] = instanceCounts{}
+	}
+	for _, snapshot := range handler.store.Snapshots() {
+		counts := response.ByGame[snapshot.GameID]
+		counts.Started++
+		response.Totals.Started++
+		if snapshot.Status == match.StatusFinished {
+			counts.Finished++
+			response.Totals.Finished++
+			for _, event := range snapshot.Events {
+				if event.Action != domain.ActionMatchFinished {
+					continue
+				}
+				var finish struct {
+					Reason string `json:"reason"`
+				}
+				if err := json.Unmarshal(event.Data, &finish); err == nil && finish.Reason == "ABANDONED" {
+					counts.Abandoned++
+					response.Totals.Abandoned++
+				}
+				break
+			}
+		} else {
+			counts.Active++
+			response.Totals.Active++
+		}
+		response.ByGame[snapshot.GameID] = counts
+	}
+	writeJSON(writer, http.StatusOK, response)
 }
 
 func (handler *Handler) writeAddError(writer http.ResponseWriter, err error) {
