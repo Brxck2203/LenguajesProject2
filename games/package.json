@@ -1,0 +1,17 @@
+{
+  "name": "gameconsole-games",
+  "private": true,
+  "type": "module",
+  "description": "Lógica orientada a objetos de los juegos de GameConsole  y sus vistas sin framework.",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "demo": "vite tictactoe/demo"
+  },
+  "devDependencies": {
+    "happy-dom": "15.11.7",
+    "typescript": "5.6.3",
+    "vite": "5.4.11",
+    "vitest": "2.1.9"
+  }
+}

@@ -22,3 +22,4 @@ data/
 .env
 dist/
 compose-logs.txt
+node_modules/

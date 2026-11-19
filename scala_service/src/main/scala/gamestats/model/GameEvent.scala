@@ -77,6 +77,11 @@ final case class MatchContext(request: AnalysisRequest):
     val wanted = names.toSet
     actions.filter(event => wanted.contains(event.action))
 
+  /** Motivo del cierre (`COMPLETED`, `DRAW`, `ABANDONED`); vacío si la partida sigue abierta. */
+  val finishReason: Option[String] = finish.flatMap(_.str("reason"))
+
+  val isFinished: Boolean = finish.isDefined
+
   /** Ganador declarado explícitamente por el productor en `MATCH_FINISHED.data`. */
   val declaredWinner: Option[String] =
     finish.flatMap(event => event.str("winnerPlayerId").orElse(event.str("winnerTeamId")))

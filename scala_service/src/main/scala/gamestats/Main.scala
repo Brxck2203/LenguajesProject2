@@ -71,7 +71,16 @@ object Main:
 
   private def write(exchange: HttpExchange, response: HttpResponse): Unit =
     val bytes = ujson.write(response.body, indent = 2).getBytes(StandardCharsets.UTF_8)
-    exchange.getResponseHeaders.set("Content-Type", "application/json; charset=utf-8")
-    response.headers.foreach((name, value) => exchange.getResponseHeaders.set(name, value))
-    exchange.sendResponseHeaders(response.status, bytes.length.toLong)
-    Using.resource(exchange.getResponseBody)(_.write(bytes))
+    val headers = exchange.getResponseHeaders
+    headers.set("Content-Type", "application/json; charset=utf-8")
+    // El panel de la consola consulta las estadísticas directamente desde el navegador.
+    headers.set("Access-Control-Allow-Origin", "*")
+    headers.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+    headers.set("Access-Control-Allow-Headers", "Content-Type, Idempotency-Key")
+    response.headers.foreach((name, value) => headers.set(name, value))
+    if response.status == 204 then
+      exchange.sendResponseHeaders(204, -1)
+      exchange.close()
+    else
+      exchange.sendResponseHeaders(response.status, bytes.length.toLong)
+      Using.resource(exchange.getResponseBody)(_.write(bytes))

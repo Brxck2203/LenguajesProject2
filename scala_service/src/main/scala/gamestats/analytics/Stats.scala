@@ -41,6 +41,19 @@ object Stats:
   def countsJson(counts: Map[String, Int]): ujson.Obj =
     ujson.Obj.from(counts.toList.sortBy(_._1).map((key, count) => key -> ujson.Num(count)))
 
+  /** Tramos consecutivos de elementos que cumplen `p` (por ejemplo rachas de aciertos), en orden. */
+  def runs[A](items: List[A])(p: A => Boolean): List[List[A]] =
+    items
+      .foldLeft(List.empty[List[A]] -> List.empty[A]) { case ((done, current), item) =>
+        if p(item) then (done, item :: current)
+        else if current.nonEmpty then (current.reverse :: done, Nil)
+        else (done, Nil)
+      } match
+      case (done, current) => (if current.nonEmpty then current.reverse :: done else done).reverse
+
+  def longestRun[A](items: List[A])(p: A => Boolean): Int =
+    runs(items)(p).map(_.size).maxOption.getOrElse(0)
+
   def optional[A](value: Option[A])(toJson: A => ujson.Value): ujson.Value =
     value.fold[ujson.Value](ujson.Null)(toJson)
 

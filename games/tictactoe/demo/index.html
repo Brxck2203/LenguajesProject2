@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Demo del gato</title>
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 24px; background: #f6f8fa; color: #1f2328; }
+      .layout { display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start; }
+      #games { display: flex; flex-wrap: wrap; gap: 16px; }
+      #log { flex: 1 1 360px; max-height: 70vh; overflow: auto; background: #fff; border: 1px solid #d0d7de;
+        border-radius: 12px; padding: 12px; font: 12px ui-monospace, monospace; white-space: pre-wrap; }
+      button.add { margin-bottom: 16px; padding: 8px 14px; }
+      label { margin-left: 12px; }
+    </style>
+  </head>
+  <body>
+    <h1>Gato vs Prolog: demo sin consola</h1>
+    <p>Página de prueba del módulo del gato. Cada tablero es una partida independiente; los eventos se muestran a la derecha en lugar de enviarse a GameStats.</p>
+    <button class="add" id="add">Agregar partida</button>
+    <label>Prolog: <input id="url" value="http://localhost:8082" size="26" /></label>
+    <label><input type="checkbox" id="aiFirst" /> La computadora abre</label>
+    <div class="layout">
+      <div id="games"></div>
+      <div id="log"></div>
+    </div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

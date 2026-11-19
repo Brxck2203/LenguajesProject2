@@ -12,7 +12,10 @@ import gamestats.model.*
 object AnalysisEngine:
 
   val analyzers: Map[String, GameAnalyzer] =
-    List(MmaAnalyzer, FootballAnalyzer, RacingAnalyzer, FreeFireAnalyzer).map(a => a.gameId -> a).toMap
+    List(
+      MmaAnalyzer, FootballAnalyzer, RacingAnalyzer, FreeFireAnalyzer, // GameStats (proyecto 1)
+      TicTacToeAnalyzer, MemoryAnalyzer, BattleshipAnalyzer              // GameConsole (proyecto 2)
+    ).map(a => a.gameId -> a).toMap
 
   def supportedGames: List[String] = analyzers.keys.toList.sorted
 
@@ -22,7 +25,9 @@ object AnalysisEngine:
     val analyzer = analyzers.get(request.gameId)
 
     val specificPlayers = analyzer.fold(Map.empty[String, ujson.Obj])(_.playerStats(ctx))
-    val winner = analyzer.flatMap(_.winner(ctx)).orElse(ctx.declaredWinner)
+    // Una partida abierta (análisis parcial) todavía no tiene ganador.
+    val winner =
+      if ctx.isFinished then analyzer.flatMap(_.winner(ctx)).orElse(ctx.declaredWinner) else None
 
     // Por jugador: campos del juego en primer nivel y actividad genérica en "activity".
     val playerStats = (generic.keySet ++ specificPlayers.keySet).toList.map { player =>
@@ -43,7 +48,9 @@ object AnalysisEngine:
           "winnerSource" -> (if ctx.declaredWinner.isDefined then "DECLARED"
                              else if winner.isDefined then "INFERRED"
                              else "NONE"),
-          "analyzer" -> analyzer.fold("GENERIC")(_.gameId)
+          "analyzer" -> analyzer.fold("GENERIC")(_.gameId),
+          "finished" -> ctx.isFinished,
+          "finishReason" -> Stats.optional(ctx.finishReason)(ujson.Str(_))
         )
       )
     )
