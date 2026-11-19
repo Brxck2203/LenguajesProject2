@@ -7,7 +7,7 @@
   "lifecycle": {
     "MATCH_STARTED": {
       "description": "Abre la partida. type=MATCH y playerId=SYSTEM.",
-      "optional": { "mode": "string", "map": "string", "track": "string", "totalLaps": "positiveInteger" }
+      "optional": { "mode": "string", "map": "string", "track": "string", "totalLaps": "positiveInteger", "pairs": "positiveInteger", "boardSize": "positiveInteger" }
     },
     "MATCH_FINISHED": {
       "description": "Cierra la partida y dispara el análisis. type=MATCH y playerId=SYSTEM. El ganador es opcional: si falta, Scala lo infiere.",
@@ -49,6 +49,27 @@
         "DAMAGE_DEALT": { "description": "Daño del actor a targetPlayerId.", "required": { "targetPlayerId": "string", "damage": "positiveNumber" }, "optional": { "weapon": "string" } },
         "PLAYER_ELIMINATED": { "description": "El actor elimina a victimId.", "required": { "victimId": "string" }, "optional": { "weapon": "string" } },
         "ZONE_SHRINK": { "description": "La zona segura se reduce (playerId=SYSTEM).", "optional": { "zonePhase": "positiveInteger" } }
+      }
+    },
+    "TIC_TAC_TOE": {
+      "description": "Gato humano contra computadora (IA en Prolog).",
+      "actions": {
+        "MOVE_PLAYED": { "description": "Jugada en el tablero.", "required": { "position": "nonNegativeInteger", "row": "nonNegativeInteger", "col": "nonNegativeInteger", "symbol": "string", "turn": "positiveInteger" } },
+        "AI_DECISION": { "description": "Decisión calculada por Prolog; no es una jugada adicional.", "required": { "position": "nonNegativeInteger", "algorithm": "string", "durationMs": "nonNegativeInteger" }, "optional": { "kind": "string", "latencyMs": "nonNegativeInteger" } }
+      }
+    },
+    "MEMORY": {
+      "description": "Memoria de parejas para un jugador.",
+      "actions": {
+        "CARD_FLIPPED": { "description": "Carta volteada.", "required": { "cardIndex": "nonNegativeInteger", "symbol": "string" } },
+        "PAIR_ATTEMPTED": { "description": "Intento de pareja con dos cartas.", "required": { "firstCard": "nonNegativeInteger", "secondCard": "nonNegativeInteger", "matched": "boolean", "attempt": "positiveInteger" } }
+      }
+    },
+    "BATTLESHIP": {
+      "description": "Battleship simplificado contra la computadora.",
+      "actions": {
+        "SHOT_FIRED": { "description": "Disparo a una casilla del rival.", "required": { "targetPlayerId": "string", "row": "nonNegativeInteger", "col": "nonNegativeInteger", "hit": "boolean" }, "optional": { "shipId": "string" } },
+        "SHIP_SUNK": { "description": "Barco hundido; no suma un acierto adicional.", "required": { "targetPlayerId": "string", "shipId": "string", "shipSize": "positiveInteger" } }
       }
     }
   }

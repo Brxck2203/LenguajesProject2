@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"sync"
 	"time"
 
@@ -23,6 +24,12 @@ type Analyzer interface {
 	Analyze(context.Context, domain.AnalysisRequest) (domain.AnalysisResult, error)
 }
 
+type PartialAnalyzer interface {
+	AnalyzePartial(context.Context, domain.AnalysisRequest, int) error
+}
+
+const partialAnalysisInterval = time.Second
+
 type Config struct {
 	Workers     int
 	Capacity    int // queued + running + waiting for automatic retry
@@ -36,18 +43,28 @@ type job struct {
 	snapshot domain.AnalysisSnapshot
 }
 
+type partialState struct {
+	request    domain.AnalysisRequest
+	revision   int
+	timer      *time.Timer
+	sending    bool
+	lastSentAt time.Time
+}
+
 type Service struct {
-	mu       sync.RWMutex
-	store    *match.Store
-	analyzer Analyzer
-	config   Config
-	jobs     map[string]*job
-	queue    chan string
-	active   int
-	stopping bool
-	ctx      context.Context
-	cancel   context.CancelFunc
-	done     chan struct{}
+	mu              sync.RWMutex
+	store           *match.Store
+	analyzer        Analyzer
+	partialAnalyzer PartialAnalyzer
+	config          Config
+	jobs            map[string]*job
+	partials        map[string]*partialState
+	queue           chan string
+	active          int
+	stopping        bool
+	ctx             context.Context
+	cancel          context.CancelFunc
+	done            chan struct{}
 }
 
 func NewService(store *match.Store, analyzer Analyzer, config Config) (*Service, error) {
@@ -55,7 +72,12 @@ func NewService(store *match.Store, analyzer Analyzer, config Config) (*Service,
 		return nil, fmt.Errorf("invalid analysis service configuration")
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	service := &Service{store: store, analyzer: analyzer, config: config, jobs: make(map[string]*job), queue: make(chan string, config.Capacity), ctx: ctx, cancel: cancel, done: make(chan struct{})}
+	service := &Service{
+		store: store, analyzer: analyzer, config: config, jobs: make(map[string]*job),
+		partials: make(map[string]*partialState), queue: make(chan string, config.Capacity),
+		ctx: ctx, cancel: cancel, done: make(chan struct{}),
+	}
+	service.partialAnalyzer, _ = analyzer.(PartialAnalyzer)
 	var workers sync.WaitGroup
 	for i := 0; i < config.Workers; i++ {
 		workers.Add(1)
@@ -84,8 +106,16 @@ func (service *Service) Add(event domain.Event) (*domain.AnalysisRequest, error)
 	}
 	request, err := service.store.Add(event)
 	if err != nil || request == nil {
+		if err == nil {
+			if event.Action == domain.ActionMatchFinished {
+				service.cancelPartialLocked(event.MatchID)
+			} else {
+				service.queuePartialLocked(event.MatchID)
+			}
+		}
 		return request, err
 	}
+	service.cancelPartialLocked(request.MatchID)
 	now := time.Now().UTC()
 	service.jobs[request.MatchID] = &job{request: request.Clone(), snapshot: domain.AnalysisSnapshot{
 		MatchID: request.MatchID, GameID: request.GameID, Status: domain.AnalysisQueued,
@@ -149,6 +179,9 @@ func (service *Service) Shutdown(ctx context.Context) error {
 	service.mu.Lock()
 	if !service.stopping {
 		service.stopping = true
+		for matchID := range service.partials {
+			service.cancelPartialLocked(matchID)
+		}
 		close(service.queue)
 	}
 	service.mu.Unlock()
@@ -229,4 +262,79 @@ func (service *Service) MatchIDs() []string {
 	service.mu.RLock()
 	defer service.mu.RUnlock()
 	return service.store.MatchIDs()
+}
+
+func (service *Service) Snapshots() []match.MatchSnapshot {
+	service.mu.RLock()
+	defer service.mu.RUnlock()
+	return service.store.Snapshots()
+}
+
+func (service *Service) queuePartialLocked(matchID string) {
+	if service.partialAnalyzer == nil || service.stopping {
+		return
+	}
+	snapshot, exists := service.store.Get(matchID)
+	if !exists || snapshot.Status != match.StatusActive {
+		return
+	}
+	state := service.partials[matchID]
+	if state == nil {
+		state = &partialState{}
+		service.partials[matchID] = state
+	}
+	state.request = domain.AnalysisRequest{MatchID: snapshot.MatchID, GameID: snapshot.GameID, Events: snapshot.Events}
+	state.revision = len(snapshot.Events)
+	if state.timer == nil && !state.sending {
+		delay := time.Until(state.lastSentAt.Add(partialAnalysisInterval))
+		if state.lastSentAt.IsZero() || delay < 0 {
+			delay = partialAnalysisInterval
+		}
+		state.timer = time.AfterFunc(delay, func() { service.sendPartial(matchID, state) })
+	}
+}
+
+func (service *Service) sendPartial(matchID string, expected *partialState) {
+	service.mu.Lock()
+	state := service.partials[matchID]
+	if state != expected || state.sending || service.stopping {
+		service.mu.Unlock()
+		return
+	}
+	state.timer = nil
+	state.sending = true
+	state.lastSentAt = time.Now()
+	request := state.request.Clone()
+	revision := state.revision
+	service.mu.Unlock()
+
+	if err := service.partialAnalyzer.AnalyzePartial(service.ctx, request, revision); err != nil {
+		// A later accepted event schedules a newer full snapshot.
+		log.Printf("partial analysis failed: matchId=%s revision=%d: %v", matchID, revision, err)
+	}
+
+	service.mu.Lock()
+	defer service.mu.Unlock()
+	if service.partials[matchID] != state {
+		return
+	}
+	state.sending = false
+	if service.stopping || state.revision <= revision {
+		delete(service.partials, matchID)
+		return
+	}
+	delay := time.Until(state.lastSentAt.Add(partialAnalysisInterval))
+	if delay < 0 {
+		delay = 0
+	}
+	state.timer = time.AfterFunc(delay, func() { service.sendPartial(matchID, state) })
+}
+
+func (service *Service) cancelPartialLocked(matchID string) {
+	if state := service.partials[matchID]; state != nil {
+		if state.timer != nil {
+			state.timer.Stop()
+		}
+		delete(service.partials, matchID)
+	}
 }

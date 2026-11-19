@@ -1,0 +1,1 @@
+window.GAMECONSOLE_CONFIG = window.GAMECONSOLE_CONFIG || {};

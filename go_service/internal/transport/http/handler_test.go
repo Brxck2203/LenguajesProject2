@@ -53,6 +53,17 @@ func TestHealth(t *testing.T) {
 	}
 }
 
+func TestCORSPreflight(t *testing.T) {
+	recorder := newTestRequest(http.MethodOptions, "/events", "", "")
+	if recorder.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusNoContent)
+	}
+	if recorder.Header().Get("Access-Control-Allow-Origin") != "*" ||
+		recorder.Header().Get("Access-Control-Allow-Methods") == "" {
+		t.Fatalf("CORS headers are missing: %v", recorder.Header())
+	}
+}
+
 func TestPostStartedEvent(t *testing.T) {
 	body := eventJSON("match_001_start", "MATCH_STARTED", "MATCH", "SYSTEM", `{}`)
 	recorder := newTestRequest(http.MethodPost, "/events", body, "application/json")
@@ -197,6 +208,78 @@ func TestGetMissingMatch(t *testing.T) {
 	recorder := newTestRequest(http.MethodGet, "/matches/inexistente", "", "")
 	if recorder.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusNotFound)
+	}
+}
+
+func TestGetEventByID(t *testing.T) {
+	store := match.NewStore()
+	router := NewRouter(store, nil)
+	body := eventJSON("match_001_start", "MATCH_STARTED", "MATCH", "SYSTEM", `{"mode":"SOLO","pairs":6}`)
+	post := httptest.NewRequest(http.MethodPost, "/events", strings.NewReader(body))
+	post.Header.Set("Content-Type", "application/json")
+	accepted := httptest.NewRecorder()
+	router.ServeHTTP(accepted, post)
+	if accepted.Code != http.StatusAccepted {
+		t.Fatalf("POST /events status = %d: %s", accepted.Code, accepted.Body)
+	}
+
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/matches/match_001/events/match_001_start", nil))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("GET event status = %d: %s", recorder.Code, recorder.Body)
+	}
+	var actual map[string]any
+	if err := json.Unmarshal(recorder.Body.Bytes(), &actual); err != nil {
+		t.Fatal(err)
+	}
+	if actual["eventId"] != "match_001_start" || actual["gameId"] != "FREE_FIRE" {
+		t.Fatalf("event response = %v", actual)
+	}
+
+	missing := httptest.NewRecorder()
+	router.ServeHTTP(missing, httptest.NewRequest(http.MethodGet, "/matches/match_001/events/missing", nil))
+	if missing.Code != http.StatusNotFound {
+		t.Fatalf("missing event status = %d, want %d", missing.Code, http.StatusNotFound)
+	}
+}
+
+func TestInstanceStats(t *testing.T) {
+	store := match.NewStore()
+	router := NewRouter(store, nil)
+	for _, body := range []string{
+		`{"eventId":"memory-start","timestamp":"2026-09-27T10:00:00Z","gameId":"MEMORY","matchId":"memory-1","playerId":"SYSTEM","type":"MATCH","action":"MATCH_STARTED","data":{"mode":"SOLO","pairs":6}}`,
+		`{"eventId":"memory-end","timestamp":"2026-09-27T10:00:01Z","gameId":"MEMORY","matchId":"memory-1","playerId":"SYSTEM","type":"MATCH","action":"MATCH_FINISHED","data":{"reason":"ABANDONED"}}`,
+		`{"eventId":"battle-start","timestamp":"2026-09-27T10:00:00Z","gameId":"BATTLESHIP","matchId":"battle-1","playerId":"SYSTEM","type":"MATCH","action":"MATCH_STARTED","data":{"mode":"VS_COMPUTER","boardSize":6}}`,
+	} {
+		request := httptest.NewRequest(http.MethodPost, "/events", strings.NewReader(body))
+		request.Header.Set("Content-Type", "application/json")
+		recorder := httptest.NewRecorder()
+		router.ServeHTTP(recorder, request)
+		if recorder.Code != http.StatusAccepted {
+			t.Fatalf("POST /events status = %d: %s", recorder.Code, recorder.Body)
+		}
+	}
+
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/stats/instances", nil))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("GET /stats/instances status = %d: %s", recorder.Code, recorder.Body)
+	}
+	var response instanceStatsResponse
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if response.Totals != (instanceCounts{Started: 2, Active: 1, Finished: 1, Abandoned: 1}) {
+		t.Fatalf("totals = %+v", response.Totals)
+	}
+	if response.ByGame["MEMORY"] != (instanceCounts{Started: 1, Finished: 1, Abandoned: 1}) {
+		t.Fatalf("memory counts = %+v", response.ByGame["MEMORY"])
+	}
+	if response.ByGame["BATTLESHIP"] != (instanceCounts{Started: 1, Active: 1}) {
+		t.Fatalf("battleship counts = %+v", response.ByGame["BATTLESHIP"])
+	}
+	if response.ByGame["TIC_TAC_TOE"] != (instanceCounts{}) || response.UpdatedAt.IsZero() {
+		t.Fatalf("zero-count game or updatedAt missing: %+v", response)
 	}
 }
 

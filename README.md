@@ -1,8 +1,8 @@
-# GameStats
+# GameConsole
 
-Sistema de procesamiento y análisis de eventos de partidas de **MMA, fútbol, motociclismo y Free Fire**.
+Consola web de **Gato vs Prolog, Memoria y Battleship**, integrada con GameStats.
 
-Go recibe los eventos por HTTP o archivos, los valida, organiza las partidas y administra su procesamiento concurrente. Scala calcula estadísticas por jugador y por partida, detecta patrones y guarda los resultados. El panel web permite consultar la información y generar partidas de prueba.
+TypeScript controla las partidas y publica eventos en Go; Scala calcula métricas finales y parciales. Go también conserva los conteos de instancias. Los analizadores y simuladores existentes para MMA, fútbol, motociclismo y Free Fire continúan disponibles.
 
 ## Requisitos
 
@@ -14,11 +14,11 @@ No se necesita instalar Go, Scala, Java, sbt ni herramientas de frontend para ej
 
 ## Ejecutar desde el código fuente
 
-Obtener la versión de `main`:
+Obtener el repositorio:
 
 ```sh
-git clone https://github.com/Brxck2203/LenguajesProject1.git
-cd LenguajesProject1
+git clone https://github.com/Brxck2203/LenguajesProject2.git
+cd LenguajesProject2
 ```
 
 Si ya se tiene el repositorio:
@@ -28,7 +28,7 @@ git switch main
 git pull --ff-only
 ```
 
-Abrir una terminal en la carpeta que contiene `docker-compose.yml`. Los puertos 8080 y 8081 deben estar disponibles.
+Abrir una terminal en la carpeta que contiene `docker-compose.yml`. Los puertos 5173, 8080, 8081 y 8082 deben estar disponibles.
 
 **Windows, desde PowerShell:**
 
@@ -42,30 +42,27 @@ powershell -ExecutionPolicy Bypass -File scripts\install.ps1
 bash scripts/install.sh
 ```
 
-El instalador prepara las carpetas de datos, construye y prueba ambos módulos, levanta los servicios y ejecuta una prueba integrada con eventos por HTTP y archivos. La primera construcción puede tardar varios minutos.
+El instalador prepara las carpetas de datos, construye y prueba Go, Scala, Prolog y la consola, levanta los servicios y ejecuta una prueba integrada. La primera construcción puede tardar varios minutos.
 
-Al finalizar debe aparecer `OK: Go y Scala integrados`. Confirmar el estado:
+Al finalizar debe aparecer `OK: consola, Prolog, Go y Scala integrados`. Confirmar el estado:
 
 ```sh
 docker compose ps
 ```
 
-Los servicios `go-service` y `scala-analytics` deben aparecer `healthy`.
+Los servicios `console`, `prolog-service`, `go-service` y `scala-analytics` deben aparecer `healthy`.
 
 ## Usar el panel
 
-Abrir **<http://localhost:8081/dashboard>**.
+Abrir la consola en **<http://localhost:5173>**. El panel de revisión existente de GameStats sigue disponible en <http://localhost:8081/dashboard>.
 
 | Sección | Contenido |
 |---|---|
-| Resumen | Partidas analizadas, eventos procesados, estadísticas por juego y patrones detectados. |
-| Partidas y patrones | Búsqueda de partidas, estadísticas individuales, resumen de partida y eventos que sustentan cada patrón. |
-| Jugadores | Historial por juego, victorias y métricas acumuladas por jugador. |
-| Entrada de eventos | Estado de la bandeja de archivos y catálogo de acciones admitidas. |
+| Juegos | Gato contra Prolog, Memoria (6 parejas) y Battleship (tablero 6 × 6). |
+| Partidas abiertas | Sesiones aisladas con envío de eventos y cierre por abandono. |
+| Panel | Conteos de Go y estadísticas finales/en curso calculadas por Scala. |
 
-El botón **Generar demostración** crea ocho partidas nuevas, dos por juego, con 73 eventos. Esperar unos segundos para que Scala termine los análisis. El panel actualiza los datos automáticamente; también se puede pulsar **Actualizar**.
-
-En el detalle, `COMPLETED` indica que el análisis terminó. Si aparece `FAILED`, revisar el error y utilizar **Reintentar análisis** después de resolver su causa. Una partida puede terminar correctamente sin detectar patrones.
+El panel de la consola consulta conteos de Go y estadísticas de Scala cada dos segundos. Para revisar simulaciones de GameStats y reintentar análisis fallidos, abrir `/dashboard` en Go.
 
 ## Generar más datos
 
@@ -106,6 +103,7 @@ Las respuestas JSON continúan disponibles para consultas técnicas:
 | Go | `GET /health` | Salud del servidor Go. |
 | Go | `GET /matches` | Partidas recibidas en el proceso actual. |
 | Go | `GET /matches/{matchId}` | Estado de la partida, participantes y cantidad de eventos. |
+| Go | `GET /stats/instances` | Conteos de partidas iniciadas, activas, cerradas y abandonadas. |
 | Go | `GET /matches/{matchId}/analysis` | Estado del análisis y resultado, si está disponible. |
 | Go | `POST /matches/{matchId}/analysis/retry` | Reintentar un análisis fallido. |
 | Go | `POST /events` | Recibir un evento. |
@@ -116,10 +114,13 @@ Las respuestas JSON continúan disponibles para consultas técnicas:
 | Scala | `GET /results` | Resultados guardados. |
 | Scala | `GET /results/{matchId}` | Análisis completo de una partida. |
 | Scala | `GET /stats/games` | Estadísticas agregadas por juego. |
+| Scala | `GET /stats/overview` | Estadísticas generales y partidas en curso. |
+| Scala | `GET /stats/games/{gameId}` | Métricas finales y parciales por juego. |
+| Scala | `GET /partial/{matchId}` | Snapshot de una partida todavía abierta. |
 | Scala | `GET /stats/games/{gameId}/players` | Historial de jugadores de un juego. |
 | Scala | `POST /analyze` | Recibir la partida preparada por Go y devolver el análisis. |
 
-Go escucha en <http://localhost:8081> y Scala en <http://localhost:8080>. La raíz de cada servicio ofrece un índice JSON; la interfaz visual se encuentra en `/dashboard` del servidor Go.
+La consola escucha en <http://localhost:5173>, Go en <http://localhost:8081>, Scala en <http://localhost:8080> y Prolog en <http://localhost:8082>. La raíz de Go y Scala ofrece un índice JSON; el panel de revisión legacy está en `/dashboard` de Go.
 
 Ejemplo en PowerShell:
 
@@ -144,10 +145,10 @@ El estado de Go es temporal: al reiniciarlo se pierden las partidas, identificad
 
 ```sh
 # Consultar los registros
-docker compose logs --tail=150 go-service scala-analytics
+docker compose logs --tail=150 console prolog-service go-service scala-analytics
 
 # Ver registros mientras se generan eventos
-docker compose logs -f go-service scala-analytics
+docker compose logs -f console prolog-service go-service scala-analytics
 
 # Detener y retirar los contenedores; los archivos de data/ permanecen
 docker compose down
@@ -159,7 +160,7 @@ docker compose up -d --wait
 docker compose up -d --build --wait
 ```
 
-Para cambiar puertos, copiar `.env.example` como `.env` y ajustar `GO_PORT` y `SCALA_PORT`. Usar los nuevos puertos al abrir el panel o consultar las API. Si la instalación falla, revisar primero `docker compose ps` y los registros.
+Para cambiar puertos, copiar `.env.example` como `.env` y ajustar `GO_PORT`, `SCALA_PORT`, `PROLOG_PORT` y `CONSOLE_PORT`. La consola utiliza esas direcciones predeterminadas; si se conecta desde otro host, definir también `VITE_GO_URL`, `VITE_SCALA_URL` y `VITE_PROLOG_URL`. Si la instalación falla, revisar primero `docker compose ps` y los registros.
 
 ## Ejecutar con imágenes publicadas
 

@@ -19,6 +19,24 @@ func (f analyzerFunc) Analyze(ctx context.Context, r domain.AnalysisRequest) (do
 	return f(ctx, r)
 }
 
+type partialCall struct {
+	request  domain.AnalysisRequest
+	revision int
+}
+
+type partialRecorder struct {
+	requests chan partialCall
+}
+
+func (recorder *partialRecorder) Analyze(_ context.Context, request domain.AnalysisRequest) (domain.AnalysisResult, error) {
+	return resultFor(request), nil
+}
+
+func (recorder *partialRecorder) AnalyzePartial(_ context.Context, request domain.AnalysisRequest, revision int) error {
+	recorder.requests <- partialCall{request: request, revision: revision}
+	return nil
+}
+
 func testService(t *testing.T, analyzer Analyzer, capacity int) *Service {
 	t.Helper()
 	s, err := NewService(match.NewStore(), analyzer, Config{Workers: 2, Capacity: capacity, MaxAttempts: 3, RetryBase: time.Millisecond, RetryMax: 2 * time.Millisecond})
@@ -214,5 +232,37 @@ func TestShutdownDeadlineCancelsRequestsAndRetainsFailedJobs(t *testing.T) {
 		if snapshot.EventCount != 2 {
 			t.Fatal("lost pending batch")
 		}
+	}
+}
+
+func TestPartialSnapshotsDebounceAndUseLatestRevision(t *testing.T) {
+	recorder := &partialRecorder{requests: make(chan partialCall, 2)}
+	service := testService(t, recorder, 2)
+	if _, err := service.Add(lifecycle("partial", false)); err != nil {
+		t.Fatal(err)
+	}
+	for index, id := range []string{"action-1", "action-2"} {
+		event := domain.Event{
+			EventID: id, Timestamp: time.Date(2026, 1, 1, 0, 0, index+1, 0, time.UTC),
+			GameID: domain.GameFreeFire, MatchID: "partial", PlayerID: "player",
+			Type: domain.TypeAction, Action: "PLAYER_ELIMINATED", Data: json.RawMessage(`{"victimId":"target"}`),
+		}
+		if _, err := service.Add(event); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	select {
+	case call := <-recorder.requests:
+		if call.revision != 3 || len(call.request.Events) != 3 || call.request.Events[2].EventID != "action-2" {
+			t.Fatalf("partial request did not contain the latest full snapshot: %+v", call)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("partial snapshot was not sent")
+	}
+	select {
+	case extra := <-recorder.requests:
+		t.Fatalf("unexpected duplicate partial request: %+v", extra)
+	case <-time.After(100 * time.Millisecond):
 	}
 }

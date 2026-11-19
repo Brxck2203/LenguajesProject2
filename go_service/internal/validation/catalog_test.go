@@ -9,13 +9,13 @@ import (
 	"github.com/Brxck2203/LenguajesProject1/go_service/internal/domain"
 )
 
-func TestEmbeddedCatalogDeclaresTheFourGames(t *testing.T) {
+func TestEmbeddedCatalogDeclaresProjectGames(t *testing.T) {
 	catalog, err := ParseCatalog(DefaultCatalogJSON())
 	if err != nil {
 		t.Fatal(err)
 	}
 	got := strings.Join(catalog.GameIDs(), ",")
-	if got != "FOOTBALL,FREE_FIRE,MMA,MOTORCYCLE_RACING" {
+	if got != "BATTLESHIP,FOOTBALL,FREE_FIRE,MEMORY,MMA,MOTORCYCLE_RACING,TIC_TAC_TOE" {
 		t.Fatalf("unexpected games: %s", got)
 	}
 }

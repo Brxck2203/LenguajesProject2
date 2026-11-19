@@ -1,4 +1,4 @@
-# GameStats — despliegue con imágenes ya publicadas por el pipeline (sin compilar nada).
+# GameConsole — despliegue con imágenes ya publicadas por el pipeline (sin compilar nada).
 # Lo usa scripts/install.sh --release y el paquete que genera la etapa de release del CI.
 #
 #   docker compose -f docker-compose.release.yml up -d --wait
@@ -10,11 +10,13 @@
 # (resultados JSON de Scala) quedan en el disco del equipo anfitrión.
 name: gamestats
 
-x-go-image: &go-image ${IMAGE_REGISTRY:-ghcr.io/brxck2203/lenguajesproject1}/go-service:${GAMESTATS_TAG:-latest}
+x-go-image: &go-image ${IMAGE_REGISTRY:-ghcr.io/brxck2203/lenguajesproject2}/go-service:${GAMESTATS_TAG:-latest}
+x-prolog-image: &prolog-image ${IMAGE_REGISTRY:-ghcr.io/brxck2203/lenguajesproject2}/prolog-service:${GAMESTATS_TAG:-latest}
+x-console-image: &console-image ${IMAGE_REGISTRY:-ghcr.io/brxck2203/lenguajesproject2}/console:${GAMESTATS_TAG:-latest}
 
 services:
   scala-analytics:
-    image: ${IMAGE_REGISTRY:-ghcr.io/brxck2203/lenguajesproject1}/scala-analytics:${GAMESTATS_TAG:-latest}
+    image: ${IMAGE_REGISTRY:-ghcr.io/brxck2203/lenguajesproject2}/scala-analytics:${GAMESTATS_TAG:-latest}
     container_name: gamestats-scala
     ports:
       - "${SCALA_PORT:-8080}:8080"
@@ -56,6 +58,39 @@ services:
       retries: 12
       start_period: 5s
     stop_grace_period: 40s
+    restart: unless-stopped
+
+  prolog-service:
+    image: *prolog-image
+    container_name: gameconsole-prolog
+    ports:
+      - "${PROLOG_PORT:-8082}:8082"
+    environment:
+      PORT: "8082"
+    restart: unless-stopped
+
+  console:
+    image: *console-image
+    container_name: gameconsole-web
+    ports:
+      - "${CONSOLE_PORT:-5173}:5173"
+    environment:
+      VITE_GO_URL: "${VITE_GO_URL:-http://localhost:${GO_PORT:-8081}}"
+      VITE_SCALA_URL: "${VITE_SCALA_URL:-http://localhost:${SCALA_PORT:-8080}}"
+      VITE_PROLOG_URL: "${VITE_PROLOG_URL:-http://localhost:${PROLOG_PORT:-8082}}"
+    depends_on:
+      go-service:
+        condition: service_healthy
+      scala-analytics:
+        condition: service_healthy
+      prolog-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5173').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
     restart: unless-stopped
 
   # Ejecución puntual: docker compose run --rm simulator [opciones]

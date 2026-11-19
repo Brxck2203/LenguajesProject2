@@ -1,10 +1,11 @@
 # Pipeline de GameStats
 #   1. go            formato, vet, pruebas con detector de carreras y binarios
 #   2. scala         pruebas y jar ejecutable
-#   3. integration   imágenes Docker, instalación desde cero y prueba de humo Go + Scala
-#   4. publish       (solo main y tags v*) publica las imágenes en GitHub Container Registry
-#   5. deploy        (solo main y tags v*) verifica la versión publicada en un runner temporal
-#   6. release       (solo tags v*) crea el Release con el paquete de instalación
+#   3. typescript    consola, reglas de juegos, tipos y pruebas
+#   4. integration   instalación desde cero y prueba de humo de los servicios
+#   5. publish       (solo main y tags v*) publica las imágenes en GitHub Container Registry
+#   6. deploy        (solo main y tags v*) verifica la versión publicada en un runner temporal
+#   7. release       (solo tags v*) crea el Release con el paquete de instalación
 name: CI/CD
 
 on:
@@ -66,9 +67,27 @@ jobs:
           name: scala-jar
           path: scala_service/target/scala-3.3.1/gamestats-analytics.jar
 
+  typescript:
+    name: TypeScript — juegos y consola
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: games
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: games/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
   integration:
     name: Integración en contenedores
-    needs: [go, scala]
+    needs: [go, scala, typescript]
     runs-on: ubuntu-latest
     env:
       SKIP_TESTS: "true" # las pruebas ya corrieron en los dos trabajos anteriores
@@ -116,8 +135,8 @@ jobs:
           export IMAGE_REGISTRY="ghcr.io/${GITHUB_REPOSITORY,,}"
           tags="latest sha-${GITHUB_SHA::7}"
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then tags="$tags ${GITHUB_REF_NAME}"; fi
-          GAMESTATS_TAG=build docker compose build scala-analytics go-service
-          for service in scala-analytics go-service; do
+          GAMESTATS_TAG=build docker compose build scala-analytics go-service prolog-service console
+          for service in scala-analytics go-service prolog-service console; do
             for tag in $tags; do
               docker tag "$IMAGE_REGISTRY/$service:build" "$IMAGE_REGISTRY/$service:$tag"
               docker push "$IMAGE_REGISTRY/$service:$tag"
@@ -162,7 +181,7 @@ jobs:
         run: |
           registry="ghcr.io/${GITHUB_REPOSITORY,,}"
           mkdir -p dist/gamestats/scripts
-          sed "s#ghcr.io/brxck2203/lenguajesproject1#${registry}#; s#GAMESTATS_TAG:-latest#GAMESTATS_TAG:-${GITHUB_REF_NAME}#" docker-compose.release.yml > dist/gamestats/docker-compose.release.yml
+          sed "s#ghcr.io/brxck2203/lenguajesproject2#${registry}#; s#GAMESTATS_TAG:-latest#GAMESTATS_TAG:-${GITHUB_REF_NAME}#" docker-compose.release.yml > dist/gamestats/docker-compose.release.yml
           cp scripts/install.sh scripts/install.ps1 scripts/smoke-test.sh dist/gamestats/scripts/
           cp docs/release-readme.md dist/gamestats/README.md
           cp -r docs dist/gamestats/docs
