@@ -4,6 +4,12 @@ Consola web de **Gato vs Prolog, Memoria y Battleship**, integrada con GameStats
 
 TypeScript controla las partidas y publica eventos en Go; Scala calcula métricas finales y parciales. Go también conserva los conteos de instancias. Los analizadores y simuladores existentes para MMA, fútbol, motociclismo y Free Fire continúan disponibles.
 
+**Video de demostración:** <https://youtu.be/w1BWZGhwOO4> (8:20). Muestra los tres juegos, la IA en Prolog, varias partidas en paralelo y el panel con estadísticas de GameStats.
+
+**Repositorio:** <https://github.com/Brxck2203/LenguajesProject2>
+
+**Integrantes:** Gabriel y Brack.
+
 ## Requisitos
 
 - Docker con Docker Compose v2. En Windows y macOS, iniciar Docker Desktop con contenedores Linux.
@@ -213,5 +219,9 @@ Los runners hospedados de GitHub son temporales; esa verificación no deja un se
 - [Contrato entre Go y Scala](docs/contrato-go-scala.md).
 - [Juegos, estadísticas y patrones](docs/juegos-y-estadisticas.md).
 - [Arquitectura](docs/arquitectura.md).
+- [Contratos entre módulos: interfaz de juegos, eventos y servicios](docs/contratos.md).
+- [Estadísticas de GameConsole: métricas, fórmulas y API](docs/estadisticas.md).
+- [Servicio Prolog: IA del gato con minimax](prolog_service/README.md).
+- [Juegos y consola TypeScript](games/README.md).
 - [Módulo Go](go_service/README.md).
 - [Módulo Scala](scala_service/README.md).
